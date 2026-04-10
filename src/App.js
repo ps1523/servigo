@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import AdminDashboard from "./AdminPanel";
 import { supabase, syncUsers, syncBookings, syncServices, syncNotifications, addUserToDb, upsertUserToDb, addBookingToDb, updateBookingStatusInDb, deleteBookingFromDb, deleteUserFromDb, addServiceToDb, deleteServiceFromDb, addNotificationToDb, markNotificationReadInDb, deleteNotificationFromDb } from './supabaseClient';
 
@@ -932,10 +932,7 @@ const INITIAL_USERS = [
   { id: "u1", fname: "Demo", lname: "User", email: "user@demo.com", mobile: "9876543210", password: "demo123", joined: "Apr 8, 2026", address: "123 Main St", city: "Mumbai", state: "Maharashtra", pincode: "400001" },
 ];
 
-const INITIAL_BOOKINGS = [
-  { id: "B10001", userId: "u1", name: "Demo User", mobile: "9876543210", address: "12, MG Road, Andheri, Mumbai 400053", service: "Electrician", serviceIcon: "⚡", serviceColor: "#ffb347", datetime: "2026-04-12T10:00", days: 1, timeSlot: "10:00-12:00", desc: "Fan not working, need wiring inspection in bedroom.", status: "Pending", createdAt: "Apr 8, 2026", amount: 299 },
-  { id: "B10002", userId: "u1", name: "Demo User", mobile: "9876543210", address: "12, MG Road, Andheri, Mumbai 400053", service: "Plumber", serviceIcon: "🔧", serviceColor: "#4a9eff", datetime: "2026-04-15T14:00", days: 1, timeSlot: "14:00-16:00", desc: "Kitchen tap leaking, needs replacement.", status: "Confirmed", createdAt: "Apr 8, 2026", amount: 249 },
-];
+
 
 // ─── CSS INJECTION ────────────────────────────────────────────────────────────
 const CSS = `
@@ -989,13 +986,9 @@ input,select,textarea,button{font-family:'Satoshi', 'DM Sans', system-ui, sans-s
 }
 `;
 
-// ─── TIME SLOTS ───────────────────────────────────────────────────────────────
-const TIME_SLOTS = [
-  "08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00", "16:00-18:00", "18:00-20:00", "20:00-22:00"
-];
+
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-const fmtDT = (dt) => { try { return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }); } catch { return dt; } };
 const uid = () => "B" + String(Date.now()).slice(-5);
 const storeGet = (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } };
 const storeSave = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
@@ -1185,7 +1178,6 @@ function Nav({ page, user, onNav, onLogout, lang, setLang, theme, setTheme }) {
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 function HomePage({ services, onNav, lang, theme }) {
-  const t = LANGUAGES[lang];
   const [hovered, setHovered] = useState(null);
   const themeColors = getTheme(theme);
 
@@ -2079,7 +2071,6 @@ function BookForm({ user, services, onBook, lang, theme }) {
 function MyBookings({ bookings, onDeleteBooking, showNotif, lang, theme }) {
   const themeColors = getTheme(theme);
   const t = LANGUAGES[lang];
-  const statusDot = { Pending: G.accent, Confirmed: G.info, Done: G.success, Cancelled: G.danger };
   const statusGradient = { 
     Pending: "linear-gradient(135deg, #ffb347 0%, #ff9100 100%)",
     Confirmed: "linear-gradient(135deg, #4a9eff 0%, #0066ff 100%)",

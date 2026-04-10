@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LANGUAGES, THEMES, getTheme } from "./App";
+import { LANGUAGES, getTheme } from "./App";
 
 // ─── DESIGN TOKENS (from App.js) ──────────────────────────────────────────────
 const G = {
@@ -65,10 +65,6 @@ const downloadAsExcel = (data, filename) => {
       }).join(",") + "\n";
     });
   }
-  
-  const sheet = `<html><body><table>${csv.split("\n").map(row => 
-    `<tr>${row.split(",").map(cell => `<td>${cell.replace(/"/g, "")}</td>`).join("")}</tr>`
-  ).join("")}</table></body></html>`;
   
   const blob = new Blob([csv], { type: "application/vnd.ms-excel" });
   const url = URL.createObjectURL(blob);
@@ -326,7 +322,6 @@ function AdminOverview({ bookings, users, onView, onExportData, theme = "dark" }
 
 function BookingTable({ bookings, onView, onStatus, onDeleteBooking, compact, theme = "dark" }) {
   const themeColors = getTheme(theme);
-  const statusDot = { Pending: "#ffb347", Confirmed: "#4a9eff", Done: "#22d37a", Cancelled: "#ff4757" };
   
   if (bookings.length === 0)
     return <div style={{ textAlign: "center", padding: "48px 20px", color: G.muted }}>No bookings found</div>;
@@ -739,7 +734,6 @@ function AdminServices({ services, onAdd, onDelete, toast, theme = "dark" }) {
 }
 
 function BookingModal({ booking: b, onClose, onStatus, theme = "dark" }) {
-  const themeColors = getTheme(theme);
   return (
     <div
       style={{
