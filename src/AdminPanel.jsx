@@ -802,13 +802,75 @@ function BookingModal({ booking: b, onClose, onStatus, theme = "dark" }) {
           </div>
         ))}
 
-        <div style={{ marginTop: 24, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {["Pending", "Confirmed", "Done", "Cancelled"].map(st => (
-            <button key={st} onClick={() => onStatus(st)} style={{ ...s.btn(b.status === st ? "primary" : "ghost", "sm"), fontSize: 12 }}>
-              {st}
+        {b.status === "Pending" && (
+          <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+            <button 
+              onClick={() => onStatus("Confirmed")} 
+              style={{ 
+                flex: 1,
+                padding: "12px 16px",
+                background: G.success,
+                color: "#000",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all .2s",
+                boxShadow: `0 4px 12px rgba(34, 211, 122, 0.3)`
+              }}
+              onMouseEnter={e => e.target.style.opacity = "0.9"}
+              onMouseLeave={e => e.target.style.opacity = "1"}
+            >
+              ✓ Confirm Booking
             </button>
-          ))}
-        </div>
+            <button 
+              onClick={() => onStatus("Cancelled")} 
+              style={{ 
+                flex: 1,
+                padding: "12px 16px",
+                background: G.danger,
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all .2s",
+                boxShadow: `0 4px 12px rgba(255, 71, 87, 0.3)`
+              }}
+              onMouseEnter={e => e.target.style.opacity = "0.9"}
+              onMouseLeave={e => e.target.style.opacity = "1"}
+            >
+              ✕ Reject Booking
+            </button>
+          </div>
+        )}
+
+        {b.status === "Confirmed" && (
+          <div style={{ marginTop: 24 }}>
+            <button 
+              onClick={() => onStatus("Done")} 
+              style={{ 
+                width: "100%",
+                padding: "12px 16px",
+                background: "#22d37a",
+                color: "#000",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all .2s",
+                boxShadow: `0 4px 12px rgba(34, 211, 122, 0.3)`
+              }}
+              onMouseEnter={e => e.target.style.opacity = "0.9"}
+              onMouseLeave={e => e.target.style.opacity = "1"}
+            >
+              ✓ Mark as Completed
+            </button>
+          </div>
+        )}
 
         <button onClick={onClose} style={{ ...s.btn("ghost", "sm"), width: "100%", marginTop: 12 }}>
           Close
@@ -871,7 +933,34 @@ export default function AdminDashboard({ users, bookings, services, onUpdateStat
           </div>
         ))}
         <div style={{ flex: 1 }} />
-        <div
+        <div style={{ borderTop: `1px solid ${themeColors.border}`, paddingTop: 16, marginTop: 16 }}>
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: 10, 
+            padding: "12px 14px", 
+            background: `${themeColors.accent}20`, 
+            border: `1px solid ${themeColors.accent}40`,
+            borderRadius: 10, 
+            marginBottom: 12, 
+            cursor: "pointer",
+            transition: "all .2s"
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = `${themeColors.accent}30`;
+            e.currentTarget.style.borderColor = `${themeColors.accent}60`;
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = `${themeColors.accent}20`;
+            e.currentTarget.style.borderColor = `${themeColors.accent}40`;
+          }}>
+            <span style={{ fontSize: 20 }}>🛡️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: themeColors.accent, letterSpacing: 0.5 }}>ADMIN PANEL</div>
+              <div style={{ fontSize: 11, color: themeColors.muted, marginTop: 1 }}>Management</div>
+            </div>
+          </div>
+          <div
           onClick={onLogout}
           style={{
             display: "flex",
@@ -882,9 +971,13 @@ export default function AdminDashboard({ users, bookings, services, onUpdateStat
             cursor: "pointer",
             fontSize: 14,
             color: themeColors.danger,
+            transition: "all .2s"
           }}
+          onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
+          onMouseLeave={e => e.currentTarget.style.opacity = "1"}
         >
           <span>🚪</span> {t.logout}
+        </div>
         </div>
       </aside>
 

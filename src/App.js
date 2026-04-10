@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import AdminDashboard from "./AdminPanel";
+import { supabase, syncUsers, syncBookings, syncServices, syncNotifications, addUserToDb, upsertUserToDb, addBookingToDb, updateBookingStatusInDb, deleteBookingFromDb, deleteUserFromDb, addServiceToDb, deleteServiceFromDb, addNotificationToDb, markNotificationReadInDb, deleteNotificationFromDb } from './supabaseClient';
 
 // ─── THEME DEFINITIONS ────────────────────────────────────────────────────────
 export const THEMES = {
@@ -117,6 +118,18 @@ export const LANGUAGES = {
     pending: "Pending",
     confirmed: "Confirmed",
     done: "Done",
+    notifications: "Notifications",
+    bookingAccepted: "Booking Accepted",
+    bookingRejected: "Booking Rejected",
+    bookingCompleted: "Booking Completed",
+    yourBooking: "Your booking",
+    hasBeenAccepted: "has been accepted by admin",
+    hasBeenRejected: "has been rejected by admin",
+    hasBeenMarkedDone: "has been marked as done",
+    markAsRead: "Mark as read",
+    clear: "Clear",
+    noNotifications: "No notifications yet",
+    statusUpdated: "Status updated to",
   },
   hi: {
     name: "हिन्दी",
@@ -229,6 +242,18 @@ export const LANGUAGES = {
     pending: "Pendiente",
     confirmed: "Confirmado",
     done: "Hecho",
+    notifications: "Notificaciones",
+    bookingAccepted: "Reserva Aceptada",
+    bookingRejected: "Reserva Rechazada",
+    bookingCompleted: "Reserva Completada",
+    yourBooking: "Tu reserva",
+    hasBeenAccepted: "ha sido aceptada por el administrador",
+    hasBeenRejected: "ha sido rechazada por el administrador",
+    hasBeenMarkedDone: "ha sido marcada como realizada",
+    markAsRead: "Marcar como leído",
+    clear: "Limpiar",
+    noNotifications: "Sin notificaciones aún",
+    statusUpdated: "Estado actualizado a",
   },
   fr: {
     name: "Français",
@@ -283,6 +308,18 @@ export const LANGUAGES = {
     pending: "En attente",
     confirmed: "Confirmé",
     done: "Terminé",
+    notifications: "Notifications",
+    bookingAccepted: "Réservation acceptée",
+    bookingRejected: "Réservation rejetée",
+    bookingCompleted: "Réservation terminée",
+    yourBooking: "Votre réservation",
+    hasBeenAccepted: "a été acceptée par l'administrateur",
+    hasBeenRejected: "a été rejetée par l'administrateur",
+    hasBeenMarkedDone: "a été marquée comme terminée",
+    markAsRead: "Marquer comme lu",
+    clear: "Effacer",
+    noNotifications: "Pas encore de notifications",
+    statusUpdated: "Statut mis à jour vers",
   },
   de: {
     name: "Deutsch",
@@ -391,6 +428,18 @@ export const LANGUAGES = {
     pending: "Pendente",
     confirmed: "Confirmado",
     done: "Concluído",
+    notifications: "Notificações",
+    bookingAccepted: "Reserva Aceita",
+    bookingRejected: "Reserva Rejeitada",
+    bookingCompleted: "Reserva Concluída",
+    yourBooking: "Sua reserva",
+    hasBeenAccepted: "foi aceita pelo administrador",
+    hasBeenRejected: "foi rejeitada pelo administrador",
+    hasBeenMarkedDone: "foi marcada como concluída",
+    markAsRead: "Marcar como lido",
+    clear: "Limpar",
+    noNotifications: "Nenhuma notificação ainda",
+    statusUpdated: "Status atualizado para",
   },
   bn: {
     name: "বাংলা",
@@ -899,6 +948,7 @@ input,select,textarea,button{font-family:'Satoshi', 'DM Sans', system-ui, sans-s
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes slideIn{from{opacity:0;transform:translateX(100px);}to{opacity:1;transform:translateX(0);}}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);};}
 @keyframes shimmer{0%{background-position:-200px 0;}100%{background-position:200px 0;}}
@@ -1011,7 +1061,16 @@ function Toast() {
 function Nav({ page, user, onNav, onLogout, lang, setLang, theme, setTheme }) {
   const t = LANGUAGES[lang];
   const [langOpen, setLangOpen] = useState(false);
+  const [dateTime, setDateTime] = useState(new Date());
   const themeColors = getTheme(theme);
+
+  useEffect(() => {
+    const timer = setInterval(() => setDateTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedDate = dateTime.toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const formattedTime = dateTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
 
   return (
     <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 40px", height: 70, background: theme === "dark" ? "rgba(5,5,10,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(20px)", borderBottom: `2px solid ${themeColors.border}`, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
@@ -1047,7 +1106,15 @@ function Nav({ page, user, onNav, onLogout, lang, setLang, theme, setTheme }) {
           <div style={{ fontFamily: themeColors.font, fontSize: 20, fontWeight: 900, letterSpacing: -0.5, background: `linear-gradient(135deg, ${themeColors.accent} 0%, #ff8c42 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
             ServiGo
           </div>
-          <div style={{ fontSize: 9, color: themeColors.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Services</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 9, color: themeColors.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Services</div>
+            <div style={{ fontSize: 8, color: themeColors.muted, fontWeight: 600, display: "flex", alignItems: "center", gap: 4, padding: "2px 6px", background: themeColors.accentDim, borderRadius: 4 }}>
+              📅 <span>{formattedDate}</span>
+            </div>
+            <div style={{ fontSize: 8, color: themeColors.accent, fontWeight: 700, display: "flex", alignItems: "center", gap: 4, padding: "2px 6px", background: `${themeColors.accent}20`, borderRadius: 4, minWidth: "fit-content" }}>
+              🕐 <span style={{ fontFamily: "monospace", letterSpacing: "0.5px" }}>{formattedTime}</span>
+            </div>
+          </div>
         </div>
         {user?.isAdmin && <span style={{ marginLeft: 8, fontSize: 10, background: themeColors.accent, color: "#fff", padding: "3px 10px", borderRadius: 6, fontFamily: themeColors.body, letterSpacing: .5, fontWeight: 700 }}>{t.admin}</span>}
       </div>
@@ -1107,7 +1174,10 @@ function Nav({ page, user, onNav, onLogout, lang, setLang, theme, setTheme }) {
           <span style={{ fontSize: 12, color: themeColors.muted, fontWeight: 600, padding: "0 12px", borderLeft: `1px solid ${themeColors.border}`, borderRight: `1px solid ${themeColors.border}` }}>👤 {user.fname}</span>
           <button style={{...s.btn("ghost", "sm"), fontWeight: 700, color: themeColors.text}} onClick={onLogout}>{t.logout}</button>
         </>}
-        {user?.isAdmin && <button style={{...s.btn("ghost", "sm"), fontWeight: 700, color: themeColors.accent}} onClick={onLogout}>{t.logout}</button>}
+        {user?.isAdmin && <>
+          <button style={{...s.btn("ghost", "sm"), fontWeight: 700, color: themeColors.accent, fontSize: 14}} onClick={() => onNav("admin")} title="Admin Panel">🛡️ Admin</button>
+          <button style={{...s.btn("ghost", "sm"), fontWeight: 700, color: themeColors.accent}} onClick={onLogout}>{t.logout}</button>
+        </>}
       </div>
     </nav>
   );
@@ -1491,22 +1561,39 @@ function LoginPage({ users, onLogin, onNav, lang, theme }) {
   const t = LANGUAGES[lang];
   const themeColors = getTheme(theme);
   const [tab, setTab] = useState("user");
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPass, setAdminPass] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !pass) return toast(t.fillAllFields, "error");
+  // Sign in with Google via Supabase OAuth (redirect flow)
+  const handleGoogleSignIn = async () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
-    if (tab === "admin") {
-      if (email === ADMIN_CREDS.email && pass === ADMIN_CREDS.password) {
-        toast(t.welcome + " " + t.admin); onLogin({ isAdmin: true });
-      } else { toast("Invalid admin credentials", "error"); }
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+      if (error) {
+        toast("Google sign-in failed: " + (error.message || error.toString()), "error");
+        setLoading(false);
+        return;
+      }
+      // Some SDK versions return a URL to redirect to
+      if (data?.url) window.location.href = data.url;
+      // otherwise Supabase will redirect automatically
+    } catch (err) {
+      console.error("Google sign-in error", err);
+      toast("Google sign-in failed", "error");
+      setLoading(false);
+    }
+  };
+
+  const handleAdminLogin = async () => {
+    if (!adminEmail || !adminPass) return toast(t.fillAllFields, "error");
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 400));
+    if (adminEmail === ADMIN_CREDS.email && adminPass === ADMIN_CREDS.password) {
+      toast(t.welcome + " " + t.admin);
+      onLogin({ isAdmin: true });
     } else {
-      const u = users.find(u => u.email === email && u.password === pass);
-      if (u) { toast(t.welcome + ", " + u.fname); onLogin(u); }
-      else toast("Invalid email or password", "error");
+      toast("Invalid admin credentials", "error");
     }
     setLoading(false);
   };
@@ -1522,13 +1609,25 @@ function LoginPage({ users, onLogin, onNav, lang, theme }) {
             <button key={tb} onClick={() => setTab(tb)} style={{ flex: 1, padding: "9px", borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily: themeColors.body, transition: "all .2s", background: tab === tb ? themeColors.accent : "transparent", color: tab === tb ? "#fff" : themeColors.muted, boxShadow: tab === tb ? `0 2px 12px ${themeColors.accentGlow}` : "none" }}>{tb.charAt(0).toUpperCase() + tb.slice(1)}</button>
           ))}
         </div>
-        <Input label={t.email} type="email" value={email} onChange={setEmail} placeholder="you@example.com" required theme={theme} />
-        <Input label={t.password} type="password" value={pass} onChange={setPass} placeholder="••••••••" required theme={theme} />
-        <button onClick={handleLogin} disabled={loading} style={{ background: themeColors.accent, color: "#fff", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontWeight: 700, cursor: "pointer", width: "100%", boxShadow: `0 4px 20px ${themeColors.accentGlow}`, opacity: loading ? .7 : 1 }}>
-          {loading ? "Logging in..." : t.login + " →"}
-        </button>
-        <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: themeColors.muted }}>{t.newUser} <span style={{ color: themeColors.accent, cursor: "pointer", fontWeight: 600 }} onClick={() => onNav("register")}>{t.signUp}</span></p>
-        <p style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: themeColors.muted }}>Demo: user@demo.com / demo123</p>
+
+        {tab === "user" ? (
+          <>
+            <button onClick={handleGoogleSignIn} disabled={loading} style={{ background: "#fff", color: "#000", border: "none", borderRadius: 10, padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer", width: "100%", boxShadow: `0 4px 20px rgba(0,0,0,0.12)`, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <img src="https://www.svgrepo.com/show/355037/google.svg" alt="Google" style={{ width: 18, height: 18 }} />
+              {loading ? "Signing in..." : "Sign in with Google"}
+            </button>
+            <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: themeColors.muted }}>{t.newUser} <span style={{ color: themeColors.accent, cursor: "pointer", fontWeight: 600 }} onClick={() => onNav("register")}>{t.signUp}</span></p>
+            <p style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: themeColors.muted }}>Demo: user@demo.com / demo123</p>
+          </>
+        ) : (
+          <>
+            <Input label={t.email} type="email" value={adminEmail} onChange={setAdminEmail} placeholder="admin@servigo.in" required theme={theme} />
+            <Input label={t.password} type="password" value={adminPass} onChange={setAdminPass} placeholder="••••••••" required theme={theme} />
+            <button onClick={handleAdminLogin} disabled={loading} style={{ background: themeColors.accent, color: "#fff", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontWeight: 700, cursor: "pointer", width: "100%", boxShadow: `0 4px 20px ${themeColors.accentGlow}`, opacity: loading ? .7 : 1 }}>
+              {loading ? "Logging in..." : t.login + " →"}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1596,16 +1695,206 @@ function RegisterPage({ onRegister, onNav, lang, theme }) {
   );
 }
 
+// ─── NOTIFICATION CENTER ──────────────────────────────────────────────────────
+function NotificationCenter({ notifications, onMarkRead, onDelete, onClearAll, lang, theme, bookings }) {
+  const themeColors = getTheme(theme);
+  const t = LANGUAGES[lang];
+  
+  const getStatusEmoji = (action) => {
+    const emojis = {
+      "Confirmed": "✅",
+      "Done": "🎉",
+      "Cancelled": "❌",
+      "Pending": "⏳",
+      "Rejected": "🚫",
+    };
+    return emojis[action] || "📬";
+  };
+  
+  const getStatusColor = (action) => {
+    const colors = {
+      "Confirmed": themeColors.success || "#22d37a",
+      "Done": "#00d4ff",
+      "Cancelled": themeColors.danger || "#ff4757",
+      "Pending": themeColors.warn || "#ffb347",
+      "Rejected": "#ff4757",
+    };
+    return colors[action] || themeColors.accent;
+  };
+  
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  return (
+    <div style={{ animation: "fadeIn .3s" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+        <div>
+          <h2 style={{ fontFamily: themeColors.font, fontSize: 26, fontWeight: 800, letterSpacing: -1, marginBottom: 4, color: themeColors.text }}>
+            🔔 {t.notifications || "Notifications"}
+          </h2>
+          <p style={{ color: themeColors.muted, fontSize: 14 }}>
+            {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}` : "All caught up!"}
+          </p>
+        </div>
+        {notifications.length > 0 && <button onClick={onClearAll} style={{ padding: "8px 14px", background: themeColors.danger, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .2s" }} onMouseEnter={e => e.target.style.opacity = "0.8"} onMouseLeave={e => e.target.style.opacity = "1"}>
+          🗑️ {t.clear || "Clear All"}
+        </button>}
+      </div>
+
+      {notifications.length === 0 ? (
+        <div style={{ ...s.card(), padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
+          <p style={{ fontSize: 14, color: themeColors.muted, marginBottom: 8 }}>{t.noNotifications || "No notifications yet"}</p>
+          <p style={{ fontSize: 12, color: themeColors.muted }}>Check back later for updates on your bookings</p>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {[...notifications].reverse().map(notif => {
+            const booking = bookings.find(b => b.id === notif.bookingId);
+            const statusColor = getStatusColor(notif.action);
+            const statusEmoji = getStatusEmoji(notif.action);
+            
+            return (
+              <div
+                key={notif.id}
+                onClick={() => !notif.read && onMarkRead(notif.id)}
+                style={{
+                  ...s.card(),
+                  padding: 16,
+                  borderLeft: `4px solid ${statusColor}`,
+                  background: notif.read ? themeColors.card : `${statusColor}08`,
+                  cursor: "pointer",
+                  transition: "all .2s",
+                  opacity: notif.read ? 0.7 : 1,
+                }}
+                onMouseEnter={e => !notif.read && (e.currentTarget.style.background = `${statusColor}12`)}
+                onMouseLeave={e => (e.currentTarget.style.background = notif.read ? themeColors.card : `${statusColor}08`)}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  {/* Status Badge (Advanced Level) */}
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 10,
+                      background: `${statusColor}18`,
+                      border: `1.5px solid ${statusColor}33`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {statusEmoji}
+                  </div>
+                  
+                  <div style={{ flex: 1 }}>
+                    {/* Basic Level - Main Info */}
+                    <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: themeColors.text, marginBottom: 2 }}>
+                          Booking #{notif.bookingId}
+                        </div>
+                        <div style={{ fontSize: 13, color: statusColor, fontWeight: 600 }}>
+                          {t.statusUpdated || "Status updated to"} <strong>{notif.action}</strong>
+                        </div>
+                      </div>
+                      {!notif.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: themeColors.accent, flexShrink: 0, marginTop: 6 }} />}
+                    </div>
+                    
+                    {/* Advanced Level - Booking Details */}
+                    {booking && (
+                      <div style={{ background: themeColors.surface, padding: 10, borderRadius: 6, marginBottom: 10, fontSize: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: themeColors.muted }}>
+                          <span>📅 {booking.date}</span>
+                          <span>💰 ₹{booking.amount}</span>
+                        </div>
+                        <div style={{ color: themeColors.muted, fontSize: 11 }}>
+                          🔧 {booking.service}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Time (Both Levels) */}
+                    <div style={{ fontSize: 11, color: themeColors.muted }}>
+                      {formatTime(notif.timestamp)}
+                    </div>
+                  </div>
+                  
+                  {/* Delete Button */}
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      onDelete(notif.id);
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: themeColors.muted,
+                      fontSize: 14,
+                      padding: 4,
+                      transition: "color .2s",
+                    }}
+                    onMouseEnter={e => (e.target.style.color = themeColors.danger)}
+                    onMouseLeave={e => (e.target.style.color = themeColors.muted)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── USER DASHBOARD ───────────────────────────────────────────────────────────
-function UserDashboard({ user, services, bookings, onBook, onLogout, lang, theme }) {
+function UserDashboard({ user, services, bookings, notifications, onBook, onDeleteUserBooking, onMarkNotificationRead, onDeleteNotification, onClearAllNotifications, onLogout, lang, theme }) {
   const themeColors = getTheme(theme);
   const t = LANGUAGES[lang];
   const [tab, setTab] = useState("book");
+  const [deletingNotif, setDeletingNotif] = useState(null);
   const myBookings = bookings.filter(b => b.userId === user.id);
+  const myNotifications = notifications.filter(n => n.userId === user.id);
+  const unreadCount = myNotifications.filter(n => !n.read).length;
+
+  const handleDeleteMyBooking = (bookingId) => {
+    if (window.confirm("Are you sure you want to delete this booking? This action cannot be undone.")) {
+      // Delete booking
+      onDeleteUserBooking(bookingId);
+      
+      // Show delete notification popup
+      setDeletingNotif({
+        id: bookingId,
+        message: "Booking deleted successfully",
+        type: "success"
+      });
+      setTimeout(() => setDeletingNotif(null), 3000);
+    }
+  };
 
   const sideItems = [
     { id: "book", icon: "🏠", label: t.bookService },
     { id: "mybookings", icon: "📋", label: t.myBookings },
+    { id: "notifications", icon: "🔔", label: t.notifications || "Notifications", badge: unreadCount },
     { id: "profile", icon: "👤", label: t.profile },
   ];
 
@@ -1621,9 +1910,11 @@ function UserDashboard({ user, services, bookings, onBook, onLogout, lang, theme
         </div>
         <div style={{ flex: 1 }}>
           {sideItems.map(item => (
-            <div key={item.id} onClick={() => setTab(item.id)}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 500, marginBottom: 4, background: tab === item.id ? themeColors.accentDim : "transparent", color: tab === item.id ? themeColors.accent : themeColors.muted, transition: "all .2s", borderLeft: tab === item.id ? `3px solid ${themeColors.accent}` : "3px solid transparent" }}>
-              <span style={{ fontSize: 16 }}>{item.icon}</span> {item.label}
+            <div key={item.id} onClick={() => setTab(item.id)} style={{ position: "relative" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 500, marginBottom: 4, background: tab === item.id ? themeColors.accentDim : "transparent", color: tab === item.id ? themeColors.accent : themeColors.muted, transition: "all .2s", borderLeft: tab === item.id ? `3px solid ${themeColors.accent}` : "3px solid transparent" }}>
+                <span style={{ fontSize: 16 }}>{item.icon}</span> {item.label}
+                {item.badge && item.badge > 0 && <span style={{ marginLeft: "auto", background: themeColors.danger, color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 10 }}>{item.badge}</span>}
+              </div>
             </div>
           ))}
         </div>
@@ -1636,9 +1927,33 @@ function UserDashboard({ user, services, bookings, onBook, onLogout, lang, theme
 
       <main style={{ flex: 1, padding: 36, overflow: "auto", background: themeColors.bg, color: themeColors.text }} className="main-content">
         {tab === "book" && <BookForm user={user} services={services} onBook={b => { onBook(b); setTab("mybookings"); }} lang={lang} theme={theme} />}
-        {tab === "mybookings" && <MyBookings bookings={myBookings} lang={lang} theme={theme} />}
+        {tab === "mybookings" && <MyBookings bookings={myBookings} onDeleteBooking={handleDeleteMyBooking} showNotif={setDeletingNotif} lang={lang} theme={theme} />}
+        {tab === "notifications" && <NotificationCenter notifications={myNotifications} onMarkRead={onMarkNotificationRead} onDelete={onDeleteNotification} onClearAll={onClearAllNotifications} lang={lang} theme={theme} bookings={bookings} />}
         {tab === "profile" && <ProfileView user={user} bookings={myBookings} lang={lang} theme={theme} />}
       </main>
+
+      {deletingNotif && (
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          background: themeColors.success,
+          color: "#fff",
+          padding: "16px 24px",
+          borderRadius: 12,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+          fontSize: 14,
+          fontWeight: 600,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          zIndex: 1000,
+          animation: "slideIn .3s ease"
+        }}>
+          <span style={{ fontSize: 18 }}>✓</span>
+          {deletingNotif.message}
+        </div>
+      )}
     </div>
   );
 }
@@ -1652,9 +1967,10 @@ function BookForm({ user, services, onBook, lang, theme }) {
 
   const submit = async () => {
     if (!f.address || !f.state || !f.city || !f.date || !f.time || !f.desc || !f.days) return toast(t.fillAllFields, "error");
+    const svc = services.find(s => s.id === f.serviceId);
+    if (!svc) return toast("Please select a valid service", "error");
     setLoading(true);
     await new Promise(r => setTimeout(r, 700));
-    const svc = services.find(s => s.id === f.serviceId);
     const finalAmount = svc.base * f.days;
     const bookingDateTime = `${f.date} ${f.time} ${f.meridiem}`;
     onBook({ id: uid(), userId: user.id, name: f.name, mobile: f.mobile, address: f.address, state: f.state, city: f.city, service: svc.name, serviceIcon: svc.icon, serviceColor: svc.color, datetime: bookingDateTime, date: f.date, time: f.time, meridiem: f.meridiem, days: f.days, desc: f.desc, status: "Pending", createdAt: new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }), amount: finalAmount });
@@ -1674,13 +1990,17 @@ function BookForm({ user, services, onBook, lang, theme }) {
       <div style={{ marginBottom: 28 }}>
         <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: G.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: .5 }}>{t.selectService} <span style={{ color: G.accent }}>*</span></label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10 }}>
-          {services.map(sv => (
+          {services.length === 0 ? (
+            <div style={{ gridColumn: "1 / -1", padding: 20, textAlign: "center", color: G.muted }}>Loading services...</div>
+          ) : (
+            services.map(sv => (
             <div key={sv.id} onClick={() => setF(p => ({ ...p, serviceId: sv.id }))} style={{ padding: "14px 12px", borderRadius: 12, cursor: "pointer", border: `1.5px solid ${f.serviceId === sv.id ? sv.color : G.border}`, background: f.serviceId === sv.id ? `${sv.color}14` : G.card, transition: "all .2s", textAlign: "center" }}>
               <div style={{ fontSize: 24, marginBottom: 6 }}>{sv.icon}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: f.serviceId === sv.id ? sv.color : G.text }}>{sv.name}</div>
               <div style={{ fontSize: 11, color: G.muted, marginTop: 2 }}>₹{sv.base}+</div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
 
@@ -1712,7 +2032,7 @@ function BookForm({ user, services, onBook, lang, theme }) {
         {/* ─── DATE & TIME PICKER ─── */}
         <div style={{ marginBottom: 18 }}>
           <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: G.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>📅 {t.preferredDateTime} <span style={{ color: G.accent }}>*</span></label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.6fr", gap: 10, "@media (max-width: 480px)": { gridTemplateColumns: "1fr" } }}>
+          <div className="responsive-grid" style={{ gap: 10 }}>
             <Input type="date" value={f.date} onChange={set("date")} min={today} required style={{ gridColumn: "span 1" }} />
             <Input type="time" value={f.time} onChange={set("time")} required style={{ gridColumn: "span 1" }} />
             <select value={f.meridiem} onChange={e => set("meridiem")(e.target.value)} style={{ ...s.input(), padding: "10px 12px", gridColumn: "span 1", cursor: "pointer", background: G.card, border: `1px solid ${G.border}`, color: G.text, borderRadius: 8 }}>
@@ -1756,7 +2076,7 @@ function BookForm({ user, services, onBook, lang, theme }) {
   );
 }
 
-function MyBookings({ bookings, lang, theme }) {
+function MyBookings({ bookings, onDeleteBooking, showNotif, lang, theme }) {
   const themeColors = getTheme(theme);
   const t = LANGUAGES[lang];
   const statusDot = { Pending: G.accent, Confirmed: G.info, Done: G.success, Cancelled: G.danger };
@@ -1765,6 +2085,19 @@ function MyBookings({ bookings, lang, theme }) {
     Confirmed: "linear-gradient(135deg, #4a9eff 0%, #0066ff 100%)",
     Done: "linear-gradient(135deg, #22d37a 0%, #00b366 100%)",
     Cancelled: "linear-gradient(135deg, #ff4757 0%, #ff1744 100%)"
+  };
+
+  const getBookingAge = (createdAt) => {
+    if (!createdAt) return "Recently booked";
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffHours = Math.floor((now - created) / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffHours < 1) return "Just now";
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return created.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
   };
   
   return (
@@ -1805,7 +2138,9 @@ function MyBookings({ bookings, lang, theme }) {
                 transition: "all .3s ease",
                 cursor: "pointer",
                 transform: "translateY(0)",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+                boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                display: "flex",
+                flexDirection: "column"
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.transform = "translateY(-8px)";
@@ -1900,20 +2235,70 @@ function MyBookings({ bookings, lang, theme }) {
                 )}
               </div>
 
-              {/* Footer timeline */}
-              <div style={{ padding: "12px 24px", background: G.surface, borderTop: `1px solid ${G.border}`, fontSize: 11, color: G.muted, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>🕐 Booked on {b.createdAt || "Apr 8, 2026"}</span>
-                <span style={{ 
-                  width: 24, 
-                  height: 24, 
-                  borderRadius: "50%", 
-                  background: statusGradient[b.status],
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}>
-                  {b.status === "Done" ? "✓" : b.status === "Pending" ? "⏳" : b.status === "Confirmed" ? "✔" : "✕"}
-                </span>
+              {/* Footer with date and actions */}
+              <div style={{ padding: "16px 24px", background: G.surface, borderTop: `1px solid ${G.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: "auto" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: G.muted, fontWeight: 600, marginBottom: 2 }}>🕐 Booked</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: G.text }}>{getBookingAge(b.createdAt)}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {b.status === "Done" || b.status === "Cancelled" ? (
+                    <button
+                      onClick={() => {
+                        if (window.confirm("Delete this booking? You cannot undo this action.")) {
+                          onDeleteBooking(b.id);
+                          showNotif && showNotif({
+                            message: `🗑️ Booking #${b.id} deleted`,
+                            type: "success"
+                          });
+                        }
+                      }}
+                      style={{
+                        padding: "6px 12px",
+                        background: themeColors.danger || "#ff4757",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all .2s",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        whiteSpace: "nowrap"
+                      }}
+                      onMouseEnter={e => {
+                        e.target.style.opacity = "0.8";
+                        e.target.style.transform = "scale(1.05)";
+                      }}
+                      onMouseLeave={e => {
+                        e.target.style.opacity = "1";
+                        e.target.style.transform = "scale(1)";
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  ) : (
+                    <div style={{ fontSize: 11, color: G.muted, padding: "6px 12px" }}>
+                      {b.status === "Pending" ? "⏳ Awaiting confirmation" : "✅ Confirmed"}
+                    </div>
+                  )}
+                  <div style={{ 
+                    width: 28, 
+                    height: 28, 
+                    borderRadius: "50%", 
+                    background: statusGradient[b.status],
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 14,
+                    color: "#fff",
+                    fontWeight: 700
+                  }}>
+                    {b.status === "Done" ? "✓" : b.status === "Pending" ? "⏳" : b.status === "Confirmed" ? "✔" : "✕"}
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -1977,25 +2362,297 @@ export default function App() {
   };
   
   const [user, setUser] = useState(() => storeGet("currentUser", null));
-  const [users, setUsers] = useState(() => storeGet("users", INITIAL_USERS));
-  const [services, setServices] = useState(() => storeGet("services", INITIAL_SERVICES));
-  const [bookings, setBookings] = useState(() => storeGet("bookings", INITIAL_BOOKINGS));
+  const [users, setUsers] = useState([]);
+  const [services, setServices] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [lang, setLang] = useState(() => storeGet("language", "en"));
   const [theme, setTheme] = useState(() => storeGet("theme", "dark"));
 
   useEffect(() => { storeSave("language", lang); }, [lang]);
   useEffect(() => { storeSave("theme", theme); }, [theme]);
 
+  // 🔄 Load from Supabase on app start
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      console.log("🔄 Syncing data from Supabase...");
+      try {
+        const dbUsers = await syncUsers();
+        // Load all users from Supabase
+        let finalUsers = [];
+        if (dbUsers.length > 0) {
+          const formatted = dbUsers.map(u => ({
+            id: u.uid, fname: u.fname, lname: u.lname, email: u.email,
+            mobile: u.mobile, address: u.address, state: u.state, city: u.city,
+            isAdmin: u.isAdmin, password: u.password
+          }));
+          setUsers(formatted);
+          finalUsers = formatted;
+        } else {
+          // If no users in Supabase, initialize with INITIAL_USERS
+          setUsers(INITIAL_USERS);
+          finalUsers = INITIAL_USERS;
+        }
+
+        // If the user returned from Supabase OAuth is signed in, map or create a local profile and auto-login
+        try {
+          const userRes = await supabase.auth.getUser();
+          const authUser = userRes?.data?.user || null;
+          if (authUser) {
+            const matched = finalUsers.find(u => (u.email || "").toLowerCase() === (authUser.email || "").toLowerCase());
+            if (matched) {
+              setUser(matched);
+              storeSave("currentUser", matched);
+              setPage(matched.isAdmin ? "admin" : "dashboard");
+            } else {
+              const name = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.user_metadata?.given_name || (authUser.email ? authUser.email.split('@')[0] : 'User');
+              const newUser = { id: authUser.id, fname: name, lname: '', email: authUser.email, mobile: '', password: 'oauth-user', address: '', city: '', state: '', joined: new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) };
+              try { await addUserToDb(newUser); setUsers(prev => [...prev, newUser]); } catch (err) { console.error("❌ Error adding oauth user to DB", err); setUsers(prev => [...prev, newUser]); }
+              setUser(newUser);
+              storeSave("currentUser", newUser);
+              setPage("dashboard");
+            }
+          }
+        } catch (err) {
+          console.error("❌ Error checking Supabase auth user:", err);
+        }
+        
+        const dbBookings = await syncBookings();
+        if (dbBookings.length > 0) {
+          const formatted = dbBookings.map(b => ({
+            id: b.booking_id, userId: b.user_id, name: b.name, mobile: b.mobile,
+            address: b.address, state: b.state, city: b.city, service: b.service,
+            serviceIcon: b.service_icon, serviceColor: b.service_color, datetime: b.datetime,
+            date: b.date, time: b.time, meridiem: b.meridiem, days: b.days, desc: b.desc,
+            status: b.status, amount: b.amount, createdAt: b.created_at
+          }));
+          setBookings(formatted);
+        }
+        
+        const dbServices = await syncServices();
+        if (dbServices.length > 0) {
+          const formatted = dbServices.map(s => ({
+            id: s.service_id, name: s.name, icon: s.icon, desc: s.desc, base: s.base, color: s.color
+          }));
+          setServices(formatted);
+        } else {
+          // Seed initial services if database is empty
+          console.log("📦 Seeding initial services to Supabase...");
+          for (const svc of INITIAL_SERVICES) {
+            try {
+              await addServiceToDb(svc);
+            } catch (err) {
+              console.error("❌ Error seeding service:", svc.name, err);
+            }
+          }
+          setServices(INITIAL_SERVICES);
+        }
+        
+        const dbNotifications = await syncNotifications();
+        if (dbNotifications.length > 0) {
+          const formatted = dbNotifications.map(n => ({
+            id: n.notif_id, bookingId: n.booking_id, userId: n.user_id, action: n.action,
+            message: n.message, timestamp: n.created_at, read: n.read
+          }));
+          setNotifications(formatted);
+        }
+        console.log("✅ Data synced from Supabase!");
+      } catch (error) {
+        console.error("❌ Error loading from Supabase:", error);
+      }
+    };
+    loadFromSupabase();
+  }, []);
+
   const handleNav = (p) => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const handleLogin = (u) => { setUser(u); storeSave("currentUser", u); handleNav(u.isAdmin ? "admin" : "dashboard"); };
   const handleLogout = () => { setUser(null); storeSave("currentUser", null); storeSave("currentPage", "home"); handleNav("home"); };
-  const handleRegister = (u) => { setUsers(p => { const newUsers = [...p, u]; storeSave("users", newUsers); return newUsers; }); handleLogin(u); };
-  const handleBook = (b) => { setBookings(p => { const newBookings = [...p, b]; storeSave("bookings", newBookings); return newBookings; }); };
-  const handleUpdateStatus = (id, status) => { setBookings(p => { const updated = p.map(b => b.id === id ? { ...b, status } : b); storeSave("bookings", updated); return updated; }); toast("Status updated!"); };
-  const handleAddService = (svc) => { setServices(p => { const newServices = [...p, svc]; storeSave("services", newServices); return newServices; }); };
-  const handleDeleteService = (id) => { setServices(p => { const filtered = p.filter(s => s.id !== id); storeSave("services", filtered); return filtered; }); };
-  const handleDeleteUser = (userId) => { setUsers(p => { const filtered = p.filter(u => u.id !== userId); storeSave("users", filtered); return filtered; }); setBookings(prev => { const updated = prev.filter(b => b.userId !== userId); storeSave("bookings", updated); return updated; }); };
-  const handleDeleteBooking = (bookingId) => { setBookings(p => { const filtered = p.filter(b => b.id !== bookingId); storeSave("bookings", filtered); return filtered; }); };
+  const handleRegister = async (u) => { 
+    try {
+      const result = await addUserToDb(u);
+      if (result === null) {
+        toast("❌ Registration failed. Please try again.", "error");
+        return;
+      } else {
+        console.log("✅ User successfully registered and saved to Supabase");
+        setUsers(p => [...p, u]);
+        handleLogin(u);
+      }
+    } catch (err) {
+      console.error("❌ Registration error:", err);
+      toast("Registration failed. Please try again.", "error");
+    }
+  };
+  const handleBook = async (b) => { 
+    try {
+      // Ensure the current user exists in Supabase before saving the booking
+      // (satisfies the FK constraint on bookings.user_id = users.uid)
+      if (user) {
+        await upsertUserToDb(user);
+      }
+      const result = await addBookingToDb(b);
+      if (result === null) {
+        toast("❌ Booking failed. Please try again.", "error");
+        return;
+      } else {
+        console.log("✅ Booking successfully saved to Supabase");
+        setBookings(p => [...p, b]);
+      }
+    } catch (err) {
+      console.error("❌ Booking error:", err);
+      toast("Booking failed. Please try again.", "error");
+    }
+  };
+  const handleUpdateStatus = async (id, status) => {
+    setBookings(p => {
+      const updated = p.map(b => b.id === id ? { ...b, status } : b);
+      
+      const booking = updated.find(b => b.id === id);
+      if (booking) {
+        const notification = {
+          id: "notif-" + Date.now(),
+          bookingId: id,
+          userId: booking.userId,
+          action: status,
+          message: `Your booking #${id} status has been updated to ${status}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        };
+        const newNotifications = [...notifications, notification];
+        setNotifications(newNotifications);
+      }
+      return updated;
+    });
+    
+    // 🔄 Update in Supabase with proper error handling
+    try {
+      await updateBookingStatusInDb(id, status);
+      
+      const booking = bookings.find(b => b.id === id);
+      if (booking) {
+        const notification = {
+          id: "notif-" + Date.now(),
+          bookingId: id,
+          userId: booking.userId,
+          action: status,
+          message: `Your booking #${id} status has been updated to ${status}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        };
+        await addNotificationToDb(notification);
+      }
+      console.log("✅ Status updated in Supabase");
+    } catch (err) {
+      console.error("❌ Status update error:", err);
+    }
+    toast("Status updated!");
+  };
+  const handleAddService = async (svc) => { 
+    try {
+      const result = await addServiceToDb(svc);
+      if (result === null) {
+        toast("❌ Service creation failed. Please try again.", "error");
+        return;
+      } else {
+        console.log("✅ Service successfully saved to Supabase");
+        setServices(p => [...p, svc]);
+      }
+    } catch (err) {
+      console.error("❌ Service error:", err);
+      toast("Service creation failed.", "error");
+    }
+  };
+  const handleDeleteService = async (id) => { 
+    try {
+      const result = await deleteServiceFromDb(id);
+      if (result === null) {
+        toast("⚠️ Delete failed", "warning");
+        return;
+      } else {
+        console.log("✅ Service successfully deleted from Supabase");
+        setServices(p => p.filter(s => s.id !== id));
+      }
+    } catch (err) {
+      console.error("❌ Delete service error:", err);
+      toast("Delete failed", "error");
+    }
+  };
+  const handleDeleteUser = async (userId) => { 
+    try {
+      const result = await deleteUserFromDb(userId);
+      if (result === null) {
+        toast("⚠️ Delete failed", "warning");
+        return;
+      } else {
+        console.log("✅ User successfully deleted from Supabase");
+        setUsers(p => p.filter(u => u.id !== userId));
+        setBookings(prev => prev.filter(b => b.userId !== userId));
+      }
+    } catch (err) {
+      console.error("❌ Delete user error:", err);
+      toast("Delete failed", "error");
+    }
+  };
+  const handleDeleteBooking = async (bookingId) => { 
+    try {
+      const result = await deleteBookingFromDb(bookingId);
+      if (result === null) {
+        toast("⚠️ Delete failed", "warning");
+        return;
+      } else {
+        console.log("✅ Booking successfully deleted from Supabase");
+        setBookings(p => p.filter(b => b.id !== bookingId));
+      }
+    } catch (err) {
+      console.error("❌ Delete booking error:", err);
+      toast("Delete failed", "error");
+    }
+  };
+  
+  const handleMarkNotificationRead = async (notificationId) => {
+    try {
+      await markNotificationReadInDb(notificationId);
+      const updated = notifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
+      setNotifications(updated);
+      console.log("✅ Notification marked as read in Supabase");
+    } catch (err) {
+      console.error("❌ Mark read error:", err);
+    }
+  };
+  
+  const handleDeleteNotification = async (notificationId) => {
+    try {
+      await deleteNotificationFromDb(notificationId);
+      const updated = notifications.filter(n => n.id !== notificationId);
+      setNotifications(updated);
+      console.log("✅ Notification deleted from Supabase");
+    } catch (err) {
+      console.error("❌ Delete notification error:", err);
+    }
+  };
+  
+  const handleClearAllNotifications = () => {
+    setNotifications([]);
+    // Note: clearAllNotifications should be added to supabaseClient.js for full Supabase sync
+  };
+
+  const handleUserDeleteBooking = async (bookingId) => {
+    try {
+      const result = await deleteBookingFromDb(bookingId);
+      if (result === null) {
+        toast("❌ Delete failed", "error");
+        return;
+      } else {
+        toast("✓ Booking deleted successfully", "success");
+        console.log("✅ Booking deleted from Supabase");
+        setBookings(p => p.filter(b => b.id !== bookingId));
+      }
+    } catch (err) {
+      console.error("❌ Delete booking error:", err);
+      toast("Delete failed", "error");
+    }
+  };
+  
   const handleExportData = () => {
     const data = {
       exportDate: new Date().toISOString(),
@@ -2022,7 +2679,7 @@ export default function App() {
       {page === "home" && <HomePage services={services} onNav={handleNav} lang={lang} theme={theme} />}
       {page === "login" && <LoginPage users={users} onLogin={handleLogin} onNav={handleNav} lang={lang} theme={theme} />}
       {page === "register" && <RegisterPage onRegister={handleRegister} onNav={handleNav} lang={lang} theme={theme} />}
-      {page === "dashboard" && user && !user.isAdmin && <UserDashboard user={user} services={services} bookings={bookings} onBook={handleBook} onLogout={handleLogout} lang={lang} theme={theme} />}
+      {page === "dashboard" && user && !user.isAdmin && <UserDashboard user={user} services={services} bookings={bookings} notifications={notifications} onBook={handleBook} onDeleteUserBooking={handleUserDeleteBooking} onMarkNotificationRead={handleMarkNotificationRead} onDeleteNotification={handleDeleteNotification} onClearAllNotifications={handleClearAllNotifications} onLogout={handleLogout} lang={lang} theme={theme} />}
       {page === "admin" && user?.isAdmin && <AdminDashboard users={users} bookings={bookings} services={services} onUpdateStatus={handleUpdateStatus} onAddService={handleAddService} onDeleteService={handleDeleteService} onDeleteUser={handleDeleteUser} onDeleteBooking={handleDeleteBooking} onExportData={handleExportData} onLogout={handleLogout} lang={lang} toast={toast} theme={theme} />}
       <Toast />
     </div>
